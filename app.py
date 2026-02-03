@@ -15,17 +15,38 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- SIDEBAR & API SETUP ---
+# --- SIDEBAR & SETUP ---
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/en/thumb/8/8e/AirSial_Logo.svg/1200px-AirSial_Logo.svg.png", width=200)
     st.title("⚙️ Configuration")
+    
     api_key = st.text_input("Enter Google Gemini API Key", type="password", help="Get your free key from aistudio.google.com")
+    
+    # --- DEBUGGER: Check Available Models ---
+    if api_key:
+        try:
+            genai.configure(api_key=api_key)
+            st.success("API Key Accepted ✅")
+            
+            # List available models to help debug the 404 error
+            with st.expander("🛠️ View Available Models"):
+                try:
+                    models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                    st.write(models)
+                except Exception as e:
+                    st.error(f"Could not list models: {e}")
+        except:
+            st.error("Invalid API Key")
+
     st.info("ℹ️ **Privacy:** Data is processed in-memory and deleted after use.")
 
 # --- GEMINI AI SETUP ---
-def configure_gemini(api_key):
+def get_model(api_key):
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel('gemini-1.5-flash')
+    
+    # Try the most stable specific version first, then fallbacks
+    # 'gemini-1.5-flash-latest' often resolves alias 404s
+    return genai.GenerativeModel('gemini-1.5-flash-latest')
 
 # --- INTELLIGENT OCR & PARSING ---
 def process_image(model, image_file):
@@ -61,7 +82,7 @@ def process_image(model, image_file):
     }
     """
     
-    # Default fallback data to prevent KeyErrors if AI fails
+    # Default fallback data
     default_data = {
         "report_no": f"Error-{image_file.name}", "date_of_report": "N/A", 
         "location": "N/A", "department": "N/A", "hazard_description": "Extraction Failed",
@@ -81,13 +102,13 @@ def process_image(model, image_file):
             text = text.split("```")[1]
         
         data = json.loads(text)
-        # Merge with default to ensure all keys exist
         return {**default_data, **data}
     except Exception as e:
+        # If the model fails, we capture the error in the description so you can see it in Excel
         default_data["hazard_description"] = f"AI Error: {str(e)}"
         return default_data
 
-# --- EXCEL GENERATOR (AUDIT READY) ---
+# --- EXCEL GENERATOR ---
 def to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -102,93 +123,12 @@ def to_excel(df):
             
         # 2. CAP Tracker Sheet
         if not df.empty:
-            cap_df = df[['report_no', 'cap_action_plan', 'responsible_person', 'target_date', 'cap_required']].copy()
+            # Check which columns exist before selecting
+            cols = ['report_no', 'cap_action_plan', 'responsible_person', 'target_date', 'cap_required']
+            existing = [c for c in cols if c in df.columns]
+            cap_df = df[existing].copy()
+            
             cap_df.to_excel(writer, sheet_name='CAP Tracker', index=False)
             ws_cap = writer.sheets['CAP Tracker']
             for col_num, value in enumerate(cap_df.columns.values):
-                ws_cap.write(0, col_num, value, header_fmt)
-
-    return output.getvalue()
-
-# --- DASHBOARD GENERATOR ---
-def generate_dashboard(df):
-    st.markdown("---")
-    st.header("📊 Monthly SMS Dashboard")
-    
-    # Helper to safe-get counts
-    def safe_count(column, value_substring):
-        if column not in df.columns: return 0
-        return len(df[df[column].astype(str).str.contains(value_substring, case=False, na=False)])
-
-    # 1. KPI Cards
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total Reports", len(df))
-    k2.metric("High Risk", safe_count('risk_level_initial', 'High'))
-    k3.metric("Wet Lease Incidents", safe_count('wet_lease_involved', 'Yes'))
-    k4.metric("CAPs Pending", safe_count('cap_required', 'Yes'))
-
-    # 2. Charts
-    c1, c2 = st.columns(2)
-    
-    with c1:
-        st.subheader("📍 Hazards by Location")
-        if 'location' in df.columns:
-            loc_counts = df['location'].value_counts().reset_index()
-            loc_counts.columns = ['Location', 'Count']
-            fig = px.bar(loc_counts, x='Location', y='Count', color='Location')
-            st.plotly_chart(fig, use_container_width=True)
-            
-    with c2:
-        st.subheader("⚠️ Risk Severity")
-        if 'severity_initial' in df.columns:
-            sev_counts = df['severity_initial'].value_counts().reset_index()
-            sev_counts.columns = ['Severity', 'Count']
-            fig2 = px.pie(sev_counts, values='Count', names='Severity', hole=0.4)
-            st.plotly_chart(fig2, use_container_width=True)
-
-# --- MAIN APP LOGIC ---
-st.title("🛫 AirSial SMS Digitizer & Dashboard")
-st.write("Upload **AS-SMS-003** forms (Images). The AI will digitize handwriting, check boxes, and generate your dashboard.")
-
-uploaded_files = st.file_uploader("Upload Report Images", accept_multiple_files=True, type=['jpg', 'png', 'jpeg'])
-
-if st.button("🚀 Process Reports"):
-    if not api_key:
-        st.error("❌ Please enter your Google Gemini API Key in the sidebar.")
-    elif not uploaded_files:
-        st.warning("⚠️ Please upload at least one file.")
-    else:
-        model = configure_gemini(api_key)
-        results = []
-        
-        # Progress Bar
-        bar = st.progress(0, text="Initializing AI...")
-        
-        for i, file in enumerate(uploaded_files):
-            # Process
-            data = process_image(model, file)
-            results.append(data)
-            # Update bar
-            bar.progress(int(((i + 1) / len(uploaded_files)) * 100), text=f"Scanning {file.name}...")
-        
-        bar.empty()
-        st.success("✅ Extraction Complete!")
-        
-        # Create DataFrame
-        df = pd.DataFrame(results)
-        
-        # Display Dashboard
-        generate_dashboard(df)
-        
-        # Display Data Table
-        with st.expander("📄 View Raw Data"):
-            st.dataframe(df)
-            
-        # Download Button
-        excel_data = to_excel(df)
-        st.download_button(
-            label="📥 Download Audit-Ready Excel",
-            data=excel_data,
-            file_name=f"AirSial_SMS_Log_{datetime.date.today()}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+                ws_cap.write(0, col_num, value, header_
