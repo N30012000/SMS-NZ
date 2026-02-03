@@ -1,13 +1,13 @@
-streamlit==1.28.0
-pandas==2.0.3
-numpy==1.24.3
-Pillow==10.0.0
-opencv-python-headless==4.8.1.78
-paddlepaddle==2.5.2
-paddleocr==2.7.0.3
-pdf2image==1.16.3
-openpyxl==3.1.2
-plotly==5.17.0
-python-dateutil==2.8.2
-pyyaml==6.0.1
-requests==2.31.0
+streamlit==1.38.0
+pandas==2.2.2
+openpyxl==3.1.5
+xlsxwriter==3.2.0
+Pillow==10.4.0
+pdf2image==1.17.0
+pytesseract==0.3.13  # Backup server OCR
+python-multipart==0.0.9
+streamlit-extras==0.3.7
+plotly==5.24.0
+kaleido==0.2.1  # For PDF export
+google-generativeai==0.8.3  # Free Gemini API
+python-dotenv==1.0.1
