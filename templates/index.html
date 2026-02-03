@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AirSial SMS Form Scanner</title>
+  <link rel="stylesheet" href="/static/main.css">
+</head>
+<body>
+  <h1>AirSial SMS Form Scanner</h1>
+  <input id="fileinput" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff">
+  <div id="preview"></div>
+  <button id="uploadBtn">Upload</button>
+  <button id="extractBtn">Extract Data</button>
+  <a id="downloadLink" style="display:none">Download Excel</a>
+
+  <h2>Monthly SMS Dashboard Generator</h2>
+  <input type="month" id="monthpicker">
+  <input type="file" id="excelfile" accept=".xlsx">
+  <button id="genDash">Generate Dashboard</button>
+  <div id="dashResult"></div>
+
+  <script src="/static/main.js"></script>
+</body>
+</html>
